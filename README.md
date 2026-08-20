@@ -1,18 +1,27 @@
 # PrintVerse
 
-PrintVerse es el backend de gestión de clientes y cotizaciones para un negocio real de impresión 3D. Esta primera iteración permite mantener catálogos configurables, cotizar piezas con costos técnicos reales y conservar los costos históricos usados en cada propuesta.
+PrintVerse es una aplicación web para gestionar clientes, catálogos de costos y cotizaciones de un negocio real de impresión 3D. En la Iteración 2, una SPA en React permite operar el flujo completo de cotización sobre la API Spring Boot: preparar catálogos, crear borradores progresivamente, calcular piezas con costos técnicos reales y consultar las condiciones históricas de cada propuesta.
 
 ## Stack
 
 - Java 21 y Spring Boot 3.5
 - Spring Web, Spring Data JPA, Hibernate y Jakarta Validation
 - PostgreSQL 17
-- Maven, JUnit 5 y Mockito
+- React 19, TypeScript 5.7 y Vite 6
+- React Router 7, Lucide React y CSS
+- Maven, JUnit 5, Mockito, npm y ESLint
 - Docker y Docker Compose
 
 ## Arquitectura
 
-La aplicación es un monolito modular organizado por responsabilidad:
+La aplicación separa una SPA cliente de una API y una base de datos:
+
+- `frontend/`: aplicación React TypeScript construida con Vite. Define las pantallas, navegación, formularios y estados de carga/error, y consume JSON mediante `fetch`.
+- `frontend/src/api`: cliente HTTP tipado y adaptadores para clientes, materiales, impresoras y cotizaciones.
+- `frontend/src/pages`: dashboard, catálogos y flujo de cotizaciones. React Router resuelve las rutas en el navegador.
+- `src/main/java`: monolito modular Spring Boot. El backend valida las reglas de negocio, es la fuente autoritativa de los cálculos y persiste en PostgreSQL.
+
+Dentro del backend, los paquetes se organizan por responsabilidad:
 
 - `controller`: API HTTP y códigos de respuesta.
 - `dto`: contratos de entrada y salida; las entidades JPA no salen de los controllers.
@@ -20,26 +29,33 @@ La aplicación es un monolito modular organizado por responsabilidad:
 - `domain`: entidades y relaciones persistentes.
 - `repository`: acceso a PostgreSQL mediante Spring Data JPA.
 - `exception`: errores de negocio y respuestas `ProblemDetail` centralizadas.
-- `config`: datos iniciales idempotentes y configuración de aplicación.
+- `config`: CORS, datos iniciales idempotentes y configuración de aplicación.
 
 ## Ejecución
 
-Requisitos locales: JDK 21, Maven 3.9+ y Docker Compose.
+Requisitos locales: JDK 21, Maven 3.9+, Node.js con npm y Docker Compose.
 
-Levantar únicamente PostgreSQL:
+Desde la raíz del repositorio, inicia PostgreSQL:
 
 ```bash
 docker compose up -d db
+```
+
+Inicia el backend en otra terminal, también desde la raíz:
+
+```bash
 mvn spring-boot:run
 ```
 
-Levantar PostgreSQL y el backend en contenedores:
+Inicia el frontend en una tercera terminal:
 
 ```bash
-docker compose up --build
+cd frontend
+npm install
+npm run dev
 ```
 
-La API queda disponible en `http://localhost:8080`. El volumen `printverse_postgres_data` conserva la información entre reinicios.
+Abre `http://localhost:5173` en el navegador. La SPA consume la API disponible en `http://localhost:8080`; el volumen `printverse_postgres_data` conserva la información entre reinicios.
 
 Variables configurables y sus valores de desarrollo:
 
@@ -50,8 +66,24 @@ Variables configurables y sus valores de desarrollo:
 | `DB_PASSWORD` | `printverse` |
 | `JPA_DDL_AUTO` | `update` |
 | `SEED_DATA_ENABLED` | `true` |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` |
+| `VITE_API_BASE_URL` | `http://localhost:8080` |
 
 El seed comprueba el nombre antes de insertar y crea una sola vez `PLA` a 350 MXN/kg y `Creality K1C` a 10 MXN/h. Puede desactivarse con `SEED_DATA_ENABLED=false`.
+
+`VITE_API_BASE_URL` es una variable del frontend y puede definirse en `frontend/.env`; si no existe, el cliente usa `http://localhost:8080`. `CORS_ALLOWED_ORIGINS` configura en el backend los orígenes autorizados para `/api/**` y por defecto permite `http://localhost:5173`.
+
+## Flujo de cotización
+
+La creación es progresiva para evitar un formulario monolítico:
+
+1. Se registran un cliente y, para agregar piezas, al menos un material y una impresora activos.
+2. En `/quotes/new` se eligen el cliente, vigencia, entrega, anticipo, markup, descuento, IVA y notas. Al guardar, la API crea una cotización `DRAFT` aunque todavía no tenga piezas.
+3. La SPA redirige al editor del borrador. Allí se agregan una o más piezas con material, impresora, peso, tiempo, riesgo de falla, precio manual opcional y cargos adicionales por unidad.
+4. Cada mutación se envía a la API; el backend recalcula y devuelve el resumen financiero autoritativo que presenta la interfaz.
+5. La vista final permite marcar el borrador como `SENT` y después registrar `ACCEPTED` o `REJECTED`. Una cotización deja de ser editable al enviarse.
+
+Cada pieza guarda instantáneas de `pricePerKg` y `costPerHour` al crearse. Los cambios posteriores en los catálogos no alteran cotizaciones históricas y la acción de recalcular conserva esas instantáneas. Cambiar explícitamente el material o la impresora de una pieza mientras la cotización está en `DRAFT` toma una instantánea nueva.
 
 ## API REST
 
@@ -156,6 +188,16 @@ Al crear un ítem se copian `pricePerKg` y `costPerHour` a snapshots propios. Ca
 
 ## Pruebas
 
+Frontend:
+
+```bash
+cd frontend
+npm run build
+npm run lint
+```
+
+Backend:
+
 ```bash
 mvn test
 mvn verify
@@ -165,4 +207,10 @@ Las pruebas cubren el motor monetario, cantidades, precio manual, IVA, descuento
 
 ## Alcance actual
 
-Esta iteración no incluye autenticación, frontend React, PDF ni órdenes de producción. Esas capacidades se incorporarán en iteraciones posteriores sobre esta API.
+La Iteración 2 incluye una SPA responsive con dashboard, gestión de clientes, materiales e impresoras, búsqueda y filtrado de cotizaciones, creación progresiva de borradores, edición de piezas y cargos, desglose financiero, recálculo y transiciones de estado.
+
+Quedan reservados explícitamente para la Iteración 3:
+
+- Autenticación y autorización con JWT.
+- Generación y descarga de un PDF real; el control actual es únicamente un marcador deshabilitado.
+- La entidad `ProductionOrder` y los flujos de producción derivados de cotizaciones aceptadas.
