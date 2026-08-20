@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: printverse
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/printverse}
+    username: ${DB_USERNAME:printverse}
+    password: ${DB_PASSWORD:printverse}
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        default_batch_fetch_size: 50
+        jdbc:
+          time_zone: UTC
+        format_sql: true
+  jackson:
+    default-property-inclusion: non_null
+
+app:
+  seed:
+    enabled: ${SEED_DATA_ENABLED:true}
