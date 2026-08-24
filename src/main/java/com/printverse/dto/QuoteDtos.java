@@ -105,7 +105,9 @@ public final class QuoteDtos {
             QuoteStatus status,
             Instant createdAt,
             LocalDate validUntil,
-            BigDecimal total) {
+            BigDecimal total,
+            BigDecimal estimatedProfit,
+            BigDecimal realMarginPercentage) {
     }
 
     public record Response(

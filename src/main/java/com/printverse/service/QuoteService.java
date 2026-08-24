@@ -255,7 +255,8 @@ public class QuoteService {
 
     private static QuoteDtos.SummaryResponse toSummaryResponse(Quote quote) {
         return new QuoteDtos.SummaryResponse(quote.getId(), quote.getQuoteNumber(), customerSummary(quote),
-                quote.getStatus(), quote.getCreatedAt(), quote.getValidUntil(), quote.getTotal());
+                quote.getStatus(), quote.getCreatedAt(), quote.getValidUntil(), quote.getTotal(),
+                quote.getEstimatedProfit(), quote.getRealMarginPercentage());
     }
 
     private static QuoteDtos.Response toResponse(Quote quote) {

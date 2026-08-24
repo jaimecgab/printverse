@@ -6,7 +6,7 @@ import { ApiError } from '../api/http'
 import { EmptyState, ErrorState, LoadingState } from '../components/Feedback'
 import { PageHeader } from '../components/PageHeader'
 import { StatusBadge } from '../components/StatusBadge'
-import type { Customer, Material, Printer as PrinterType, Quote, QuoteSummary } from '../types'
+import type { Customer, Material, Printer as PrinterType, QuoteSummary } from '../types'
 import { currency, formatDate } from '../utils/format'
 
 interface DashboardData {
@@ -14,8 +14,6 @@ interface DashboardData {
   materials: Material[]
   printers: PrinterType[]
   summaries: QuoteSummary[]
-  details: Quote[]
-  detailFailures: number
 }
 
 export function DashboardPage() {
@@ -31,10 +29,8 @@ export function DashboardPage() {
         const [customers, materials, printers, summaries] = await Promise.all([
           customersApi.list(), materialsApi.list(), printersApi.list(), quotesApi.list(),
         ])
-        const settled = await Promise.allSettled(summaries.map((quote) => quotesApi.get(quote.id)))
         if (!active) return
-        const details = settled.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
-        setData({ customers, materials, printers, summaries, details, detailFailures: settled.length - details.length })
+        setData({ customers, materials, printers, summaries })
       } catch (caught) {
         if (active) setError(caught instanceof ApiError ? caught.message : 'Ocurrió un error inesperado.')
       }
@@ -50,7 +46,7 @@ export function DashboardPage() {
   const counts = { DRAFT: 0, SENT: 0, ACCEPTED: 0, REJECTED: 0 }
   data.summaries.forEach((quote) => { counts[quote.status] += 1 })
   const quotedValue = data.summaries.reduce((sum, quote) => sum + quote.total, 0)
-  const profit = data.details.reduce((sum, quote) => sum + quote.estimatedProfit, 0)
+  const profit = data.summaries.reduce((sum, quote) => sum + quote.estimatedProfit, 0)
   const recent = data.summaries.slice(0, 5)
   const noMaterials = !data.materials.some((material) => material.active)
   const noPrinters = !data.printers.some((printer) => printer.active)
@@ -64,11 +60,10 @@ export function DashboardPage() {
         actions={<Link className="button button--accent" to="/quotes/new"><FilePlus2 size={18} /> Nueva cotización</Link>}
       />
 
-      {(noMaterials || noPrinters || data.detailFailures > 0) && (
+      {(noMaterials || noPrinters) && (
         <section className="alerts-stack" aria-label="Alertas operativas">
           {noMaterials && <Link to="/materials" className="alert-band"><AlertCircle /><span><strong>Sin materiales activos.</strong> Activa uno para poder agregar piezas.</span><ArrowRight /></Link>}
           {noPrinters && <Link to="/printers" className="alert-band"><AlertCircle /><span><strong>Sin impresoras activas.</strong> La creación de piezas está detenida.</span><ArrowRight /></Link>}
-          {data.detailFailures > 0 && <div className="alert-band alert-band--neutral"><AlertCircle /><span>No se pudo calcular la ganancia de {data.detailFailures} cotización(es). El total mostrado es parcial.</span></div>}
         </section>
       )}
 

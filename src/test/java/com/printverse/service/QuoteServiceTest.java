@@ -17,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -57,6 +58,19 @@ class QuoteServiceTest {
         assertThat(response.status()).isEqualTo(QuoteStatus.DRAFT);
         assertThat(response.quoteNumber()).startsWith("PV-" + LocalDate.now().getYear() + "-");
         assertThat(response.total()).isEqualByComparingTo("0.00");
+    }
+
+    @Test
+    void listSummaryUsesPersistedProfitAndMargin() {
+        Quote quote = quoteWithItem();
+        quote.setEstimatedProfit(new BigDecimal("123.45"));
+        quote.setRealMarginPercentage(new BigDecimal("37.5000"));
+        when(quoteRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(quote));
+
+        QuoteDtos.SummaryResponse response = service.list().get(0);
+
+        assertThat(response.estimatedProfit()).isEqualByComparingTo("123.45");
+        assertThat(response.realMarginPercentage()).isEqualByComparingTo("37.5000");
     }
 
     @Test

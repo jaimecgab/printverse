@@ -61,6 +61,8 @@ export interface QuoteSummary {
   createdAt: string
   validUntil: string
   total: number
+  estimatedProfit: number
+  realMarginPercentage: number
 }
 
 export interface Charge {
