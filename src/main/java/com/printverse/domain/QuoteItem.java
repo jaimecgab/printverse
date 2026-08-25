@@ -59,6 +59,15 @@ public class QuoteItem {
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal printerCostPerHourSnapshot;
 
+    @Column(nullable = false, length = 100)
+    private String materialNameSnapshot;
+
+    @Column(nullable = false, length = 100)
+    private String printerNameSnapshot;
+
+    @Column(length = 100)
+    private String printerModelSnapshot;
+
     @Column(nullable = false, precision = 14, scale = 2)
     private BigDecimal materialCostUnit = BigDecimal.ZERO;
 
@@ -100,6 +109,9 @@ public class QuoteItem {
         this.manualUnitPrice = manualUnitPrice;
         this.materialPricePerKgSnapshot = material.getPricePerKg();
         this.printerCostPerHourSnapshot = printer.getCostPerHour();
+        this.materialNameSnapshot = material.getName();
+        this.printerNameSnapshot = printer.getName();
+        this.printerModelSnapshot = printer.getModel();
     }
 
     public void addAdditionalCharge(AdditionalCharge charge) {
@@ -110,6 +122,33 @@ public class QuoteItem {
     public void removeAdditionalCharge(AdditionalCharge charge) {
         additionalCharges.remove(charge);
         charge.setQuoteItem(null);
+    }
+
+    public void replaceAdditionalCharges(List<AdditionalCharge> charges) {
+        additionalCharges.forEach(charge -> charge.setQuoteItem(null));
+        additionalCharges.clear();
+        charges.forEach(this::addAdditionalCharge);
+    }
+
+    public void changeMaterial(Material material) {
+        this.material = material;
+        materialPricePerKgSnapshot = material.getPricePerKg();
+        materialNameSnapshot = material.getName();
+    }
+
+    public void changePrinter(Printer printer) {
+        this.printer = printer;
+        printerCostPerHourSnapshot = printer.getCostPerHour();
+        printerNameSnapshot = printer.getName();
+        printerModelSnapshot = printer.getModel();
+    }
+
+    public void copySnapshotsFrom(QuoteItem source) {
+        materialPricePerKgSnapshot = source.materialPricePerKgSnapshot;
+        printerCostPerHourSnapshot = source.printerCostPerHourSnapshot;
+        materialNameSnapshot = source.materialNameSnapshot;
+        printerNameSnapshot = source.printerNameSnapshot;
+        printerModelSnapshot = source.printerModelSnapshot;
     }
 
     public Long getId() { return id; }
@@ -133,6 +172,9 @@ public class QuoteItem {
     public void setMaterialPricePerKgSnapshot(BigDecimal value) { this.materialPricePerKgSnapshot = value; }
     public BigDecimal getPrinterCostPerHourSnapshot() { return printerCostPerHourSnapshot; }
     public void setPrinterCostPerHourSnapshot(BigDecimal value) { this.printerCostPerHourSnapshot = value; }
+    public String getMaterialNameSnapshot() { return materialNameSnapshot; }
+    public String getPrinterNameSnapshot() { return printerNameSnapshot; }
+    public String getPrinterModelSnapshot() { return printerModelSnapshot; }
     public BigDecimal getMaterialCostUnit() { return materialCostUnit; }
     public void setMaterialCostUnit(BigDecimal value) { this.materialCostUnit = value; }
     public BigDecimal getMachineCostUnit() { return machineCostUnit; }

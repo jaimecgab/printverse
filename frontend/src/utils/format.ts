@@ -8,6 +8,10 @@ export const currency = new Intl.NumberFormat('es-MX', {
 
 export const number = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 })
 
+export function ratioToPercentage(value: number): number {
+  return value * 100
+}
+
 export function formatDate(value: string | null | undefined, withTime = false): string {
   if (!value) return 'Sin definir'
   const date = value.length === 10 ? new Date(`${value}T12:00:00`) : new Date(value)

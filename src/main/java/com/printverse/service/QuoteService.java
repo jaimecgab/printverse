@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static com.printverse.service.MoneyUtils.ROUNDING_MODE;
 import static com.printverse.service.MoneyUtils.money;
+import static com.printverse.service.MoneyUtils.percentage;
 
 @Service
 public class QuoteService {
@@ -52,6 +53,8 @@ public class QuoteService {
                 CustomerService.nullable(request.notes()), normalizedPercentage(request.markupPercentage()),
                 normalizedPercentage(orZero(request.discountPercentage())), request.taxEnabled(),
                 normalizedPercentage(request.taxPercentage()));
+        quote.setTitle(CustomerService.nullable(request.title()));
+        quote.setInternalNotes(CustomerService.nullable(request.internalNotes()));
         calculationService.recalculate(quote);
         return toResponse(quoteRepository.save(quote));
     }
@@ -72,15 +75,18 @@ public class QuoteService {
     public QuoteDtos.Response update(Long id, QuoteDtos.UpdateRequest request) {
         Quote quote = findForUpdate(id);
         ensureDraft(quote);
+        quote.setTitle(CustomerService.nullable(request.title()));
         quote.setValidUntil(request.validUntil());
         quote.setEstimatedDeliveryDate(request.estimatedDeliveryDate());
         quote.setDepositPercentage(normalizedPercentage(request.depositPercentage()));
         quote.setNotes(CustomerService.nullable(request.notes()));
+        quote.setInternalNotes(CustomerService.nullable(request.internalNotes()));
         quote.setMarkupPercentage(normalizedPercentage(request.markupPercentage()));
         quote.setDiscountPercentage(normalizedPercentage(request.discountPercentage()));
         quote.setTaxEnabled(request.taxEnabled());
         quote.setTaxPercentage(normalizedPercentage(request.taxPercentage()));
         calculationService.recalculate(quote);
+        quote.touch();
         return toResponse(quote);
     }
 
@@ -93,8 +99,10 @@ public class QuoteService {
         QuoteItem item = new QuoteItem(CustomerService.clean(request.name()), request.quantity(), material, printer,
                 normalizedWeight(request.weightGrams()), request.printTimeMinutes(),
                 normalizedPercentage(request.failureRiskPercentage()), normalizeMoney(request.manualUnitPrice()));
+        replaceAdditionalCharges(item, request.additionalCharges() == null ? List.of() : request.additionalCharges());
         quote.addItem(item);
         calculationService.recalculate(quote);
+        quote.touch();
         quoteRepository.flush();
         return toResponse(quote);
     }
@@ -109,13 +117,11 @@ public class QuoteService {
 
         if (!Objects.equals(item.getMaterial().getId(), material.getId())) {
             ensureActive(material);
-            item.setMaterial(material);
-            item.setMaterialPricePerKgSnapshot(money(material.getPricePerKg()));
+            item.changeMaterial(material);
         }
         if (!Objects.equals(item.getPrinter().getId(), printer.getId())) {
             ensureActive(printer);
-            item.setPrinter(printer);
-            item.setPrinterCostPerHourSnapshot(money(printer.getCostPerHour()));
+            item.changePrinter(printer);
         }
 
         item.setName(CustomerService.clean(request.name()));
@@ -124,7 +130,12 @@ public class QuoteService {
         item.setPrintTimeMinutes(request.printTimeMinutes());
         item.setFailureRiskPercentage(normalizedPercentage(request.failureRiskPercentage()));
         item.setManualUnitPrice(normalizeMoney(request.manualUnitPrice()));
+        if (request.additionalCharges() != null) {
+            replaceAdditionalCharges(item, request.additionalCharges());
+        }
         calculationService.recalculate(quote);
+        quote.touch();
+        quoteRepository.flush();
         return toResponse(quote);
     }
 
@@ -134,6 +145,7 @@ public class QuoteService {
         ensureDraft(quote);
         quote.removeItem(findItem(quote, itemId));
         calculationService.recalculate(quote);
+        quote.touch();
     }
 
     @Transactional
@@ -143,6 +155,7 @@ public class QuoteService {
         QuoteItem item = findItem(quote, itemId);
         item.addAdditionalCharge(new AdditionalCharge(CustomerService.clean(request.description()), money(request.amount())));
         calculationService.recalculate(quote);
+        quote.touch();
         quoteRepository.flush();
         return toResponse(quote);
     }
@@ -158,6 +171,7 @@ public class QuoteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Additional charge " + chargeId + " was not found in item " + itemId));
         item.removeAdditionalCharge(charge);
         calculationService.recalculate(quote);
+        quote.touch();
     }
 
     @Transactional
@@ -165,7 +179,36 @@ public class QuoteService {
         Quote quote = findForUpdate(id);
         ensureDraft(quote);
         calculationService.recalculate(quote);
+        quote.touch();
         return toResponse(quote);
+    }
+
+    @Transactional
+    public QuoteDtos.Response duplicate(Long id, QuoteDtos.DuplicateRequest request) {
+        Quote source = findForUpdate(id);
+        Quote duplicate = new Quote(generateQuoteNumber(), source.getCustomer(), request.validUntil(),
+                request.estimatedDeliveryDate(), source.getDepositPercentage(), source.getNotes(),
+                source.getMarkupPercentage(), source.getDiscountPercentage(), source.isTaxEnabled(),
+                source.getTaxPercentage());
+        duplicate.setTitle(source.getTitle());
+        duplicate.setInternalNotes(source.getInternalNotes());
+        duplicate.copyCustomerSnapshotsFrom(source);
+
+        for (QuoteItem sourceItem : source.getItems()) {
+            QuoteItem item = new QuoteItem(sourceItem.getName(), sourceItem.getQuantity(), sourceItem.getMaterial(),
+                    sourceItem.getPrinter(), sourceItem.getWeightGrams(), sourceItem.getPrintTimeMinutes(),
+                    sourceItem.getFailureRiskPercentage(), sourceItem.getManualUnitPrice());
+            item.copySnapshotsFrom(sourceItem);
+            item.replaceAdditionalCharges(sourceItem.getAdditionalCharges().stream()
+                    .map(charge -> new AdditionalCharge(charge.getDescription(), charge.getAmount()))
+                    .toList());
+            duplicate.addItem(item);
+        }
+
+        calculationService.recalculate(duplicate);
+        quoteRepository.save(duplicate);
+        quoteRepository.flush();
+        return toResponse(duplicate);
     }
 
     @Transactional
@@ -181,7 +224,7 @@ public class QuoteService {
         if (current == QuoteStatus.DRAFT && quote.getItems().isEmpty()) {
             throw new BusinessRuleException("A quote must contain at least one item before it can be sent");
         }
-        quote.setStatus(targetStatus);
+        quote.transitionTo(targetStatus);
         return toResponse(quote);
     }
 
@@ -248,29 +291,47 @@ public class QuoteService {
         return value == null ? BigDecimal.ZERO : value;
     }
 
+    private static void replaceAdditionalCharges(QuoteItem item, List<QuoteDtos.ChargeRequest> requests) {
+        item.replaceAdditionalCharges(requests.stream()
+                .map(request -> new AdditionalCharge(CustomerService.clean(request.description()), money(request.amount())))
+                .toList());
+    }
+
     private static String generateQuoteNumber() {
         String token = UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
         return "PV-" + Year.now().getValue() + "-" + token;
     }
 
-    private static QuoteDtos.SummaryResponse toSummaryResponse(Quote quote) {
-        return new QuoteDtos.SummaryResponse(quote.getId(), quote.getQuoteNumber(), customerSummary(quote),
-                quote.getStatus(), quote.getCreatedAt(), quote.getValidUntil(), quote.getTotal(),
+    static QuoteDtos.SummaryResponse toSummaryResponse(Quote quote) {
+        return new QuoteDtos.SummaryResponse(quote.getId(), quote.getQuoteNumber(), quote.getTitle(), customerSummary(quote),
+                quote.getStatus(), quote.getCreatedAt(), quote.getUpdatedAt(), quote.getValidUntil(),
+                quote.getCurrencyCode(), quote.getTotal(),
                 quote.getEstimatedProfit(), quote.getRealMarginPercentage());
     }
 
     private static QuoteDtos.Response toResponse(Quote quote) {
         List<QuoteDtos.ItemResponse> items = quote.getItems().stream().map(QuoteService::itemResponse).toList();
-        return new QuoteDtos.Response(quote.getId(), quote.getQuoteNumber(), customerSummary(quote),
-                quote.getStatus(), quote.getCreatedAt(), quote.getValidUntil(), quote.getEstimatedDeliveryDate(),
-                quote.getDepositPercentage(), quote.getNotes(), quote.getMarkupPercentage(), quote.getDiscountPercentage(),
+        BigDecimal depositAmount = quote.getDepositPercentage() == null
+                ? money(BigDecimal.ZERO)
+                : money(quote.getTotal().multiply(percentage(quote.getDepositPercentage())));
+        BigDecimal remainingBalance = money(quote.getTotal().subtract(depositAmount));
+        return new QuoteDtos.Response(quote.getId(), quote.getQuoteNumber(), quote.getTitle(), customerSummary(quote),
+                quote.getStatus(), quote.getCreatedAt(), quote.getUpdatedAt(), quote.getSentAt(), quote.getAcceptedAt(),
+                quote.getRejectedAt(), quote.getValidUntil(), quote.getEstimatedDeliveryDate(),
+                quote.getDepositPercentage(), quote.getNotes(), quote.getInternalNotes(), quote.getCurrencyCode(),
+                quote.getMarkupPercentage(), quote.getDiscountPercentage(),
                 quote.isTaxEnabled(), quote.getTaxPercentage(), quote.getInternalCost(), quote.getSuggestedSubtotal(),
                 quote.getFinalSubtotal(), quote.getDiscountAmount(), money(quote.getFinalSubtotal().subtract(quote.getDiscountAmount())),
-                quote.getTaxAmount(), quote.getTotal(), quote.getEstimatedProfit(), quote.getRealMarginPercentage(), items);
+                quote.getTaxAmount(), quote.getTotal(), depositAmount, remainingBalance, quote.getEstimatedProfit(),
+                quote.getRealMarginPercentage(), items);
     }
 
     private static QuoteDtos.CustomerSummary customerSummary(Quote quote) {
         Customer customer = quote.getCustomer();
+        if (quote.getCustomerNameSnapshot() != null) {
+            return new QuoteDtos.CustomerSummary(customer.getId(), quote.getCustomerNameSnapshot(),
+                    quote.getCustomerPhoneSnapshot(), quote.getCustomerEmailSnapshot());
+        }
         return new QuoteDtos.CustomerSummary(customer.getId(), customer.getName(), customer.getPhone(), customer.getEmail());
     }
 
@@ -280,9 +341,15 @@ public class QuoteService {
         List<QuoteDtos.ChargeResponse> charges = item.getAdditionalCharges().stream()
                 .map(charge -> new QuoteDtos.ChargeResponse(charge.getId(), charge.getDescription(), charge.getAmount()))
                 .toList();
+        String materialName = item.getMaterialNameSnapshot() != null
+                ? item.getMaterialNameSnapshot() : material.getName();
+        String printerName = item.getPrinterNameSnapshot() != null
+                ? item.getPrinterNameSnapshot() : printer.getName();
+        String printerModel = item.getPrinterNameSnapshot() != null
+                ? item.getPrinterModelSnapshot() : printer.getModel();
         return new QuoteDtos.ItemResponse(item.getId(), item.getName(), item.getQuantity(),
-                new QuoteDtos.MaterialSummary(material.getId(), material.getName()),
-                new QuoteDtos.PrinterSummary(printer.getId(), printer.getName(), printer.getModel()),
+                new QuoteDtos.MaterialSummary(material.getId(), materialName),
+                new QuoteDtos.PrinterSummary(printer.getId(), printerName, printerModel),
                 item.getWeightGrams(), item.getPrintTimeMinutes(), item.getFailureRiskPercentage(),
                 item.getMaterialPricePerKgSnapshot(), item.getPrinterCostPerHourSnapshot(), item.getMaterialCostUnit(),
                 item.getMachineCostUnit(), item.getFailureRiskCostUnit(), item.getAdditionalChargesUnit(),

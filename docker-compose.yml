@@ -1,12 +1,11 @@
 services:
   db:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-printverse}
-      POSTGRES_USER: ${POSTGRES_USER:-printverse}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-printverse}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - printverse_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -17,20 +16,54 @@ services:
       start_period: 5s
 
   backend:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     build:
       context: .
     environment:
-      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-printverse}
-      DB_USERNAME: ${POSTGRES_USER:-printverse}
-      DB_PASSWORD: ${POSTGRES_PASSWORD:-printverse}
-      JPA_DDL_AUTO: ${JPA_DDL_AUTO:-update}
-      SEED_DATA_ENABLED: ${SEED_DATA_ENABLED:-true}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173}
-    ports:
-      - "${APP_PORT:-8080}:8080"
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      DB_USERNAME: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      JWT_DURATION: ${JWT_DURATION:-8h}
+      APP_ADMIN_USERNAME: ${APP_ADMIN_USERNAME:?Set APP_ADMIN_USERNAME in .env}
+      APP_ADMIN_DISPLAY_NAME: ${APP_ADMIN_DISPLAY_NAME:?Set APP_ADMIN_DISPLAY_NAME in .env}
+      APP_ADMIN_PASSWORD: ${APP_ADMIN_PASSWORD:?Set APP_ADMIN_PASSWORD in .env}
+      FLYWAY_BASELINE_ON_MIGRATE: ${FLYWAY_BASELINE_ON_MIGRATE:-false}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8088}
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  frontend:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-8088}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
 volumes:
   printverse_postgres_data:

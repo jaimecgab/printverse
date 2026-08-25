@@ -3,6 +3,7 @@ package com.printverse.service;
 import com.printverse.domain.AdditionalCharge;
 import com.printverse.domain.Quote;
 import com.printverse.domain.QuoteItem;
+import com.printverse.exception.BusinessRuleException;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -17,6 +18,9 @@ public class QuoteCalculationService {
 
     private static final BigDecimal GRAMS_PER_KILOGRAM = new BigDecimal("1000");
     private static final BigDecimal MINUTES_PER_HOUR = new BigDecimal("60");
+    private static final BigDecimal MAX_ITEM_MONEY = new BigDecimal("999999999999.99");
+    private static final BigDecimal MAX_QUOTE_MONEY = new BigDecimal("99999999999999.99");
+    private static final BigDecimal MAX_MARGIN = new BigDecimal("999999.9999");
 
     public void recalculate(Quote quote) {
         BigDecimal internalCost = BigDecimal.ZERO;
@@ -46,6 +50,15 @@ public class QuoteCalculationService {
                     .multiply(MoneyUtils.ONE_HUNDRED).setScale(4, ROUNDING_MODE)
                 : BigDecimal.ZERO.setScale(4, ROUNDING_MODE);
 
+        requireQuoteMoney(internalCost, "Internal cost");
+        requireQuoteMoney(suggestedSubtotal, "Suggested subtotal");
+        requireQuoteMoney(finalSubtotal, "Final subtotal");
+        requireQuoteMoney(discountAmount, "Discount amount");
+        requireQuoteMoney(taxAmount, "Tax amount");
+        requireQuoteMoney(total, "Quote total");
+        requireQuoteMoney(estimatedProfit, "Estimated profit");
+        requireWithin(margin, MAX_MARGIN, "Real margin percentage");
+
         quote.setInternalCost(internalCost);
         quote.setSuggestedSubtotal(suggestedSubtotal);
         quote.setFinalSubtotal(finalSubtotal);
@@ -71,6 +84,14 @@ public class QuoteCalculationService {
         BigDecimal internalCost = money(technicalBase.add(failureCost).add(charges));
         BigDecimal suggestedPrice = money(internalCost.multiply(BigDecimal.ONE.add(percentage(markupPercentage))));
 
+        requireItemMoney(materialCost, "Material cost per unit");
+        requireItemMoney(machineCost, "Machine cost per unit");
+        requireItemMoney(failureCost, "Failure risk cost per unit");
+        requireItemMoney(charges, "Additional charges per unit");
+        requireItemMoney(internalCost, "Internal cost per unit");
+        requireItemMoney(suggestedPrice, "Suggested price per unit");
+        requireItemMoney(item.getFinalUnitPrice(), "Final price per unit");
+
         item.setMaterialCostUnit(materialCost);
         item.setMachineCostUnit(machineCost);
         item.setFailureRiskCostUnit(failureCost);
@@ -79,6 +100,21 @@ public class QuoteCalculationService {
         item.setSuggestedPriceUnit(suggestedPrice);
         if (item.getManualUnitPrice() != null) {
             item.setManualUnitPrice(money(item.getManualUnitPrice()));
+        }
+    }
+
+    private static void requireItemMoney(BigDecimal value, String field) {
+        requireWithin(value, MAX_ITEM_MONEY, field);
+    }
+
+    private static void requireQuoteMoney(BigDecimal value, String field) {
+        requireWithin(value, MAX_QUOTE_MONEY, field);
+    }
+
+    private static void requireWithin(BigDecimal value, BigDecimal maximum, String field) {
+        if (value.abs().compareTo(maximum) > 0) {
+            throw new BusinessRuleException(
+                    field + " exceeds the maximum supported value of " + maximum.toPlainString());
         }
     }
 }

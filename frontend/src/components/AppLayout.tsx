@@ -1,16 +1,22 @@
-import { Factory, FilePlus2, FileText, Gauge, Package, Printer, Users } from 'lucide-react'
+import { Factory, FilePlus2, FileText, Gauge, LogOut, Package, Printer, ShieldCheck, Users } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Brand } from './Brand'
+import { useAuth } from '../context/AuthContext'
 
 const links = [
   { to: '/', label: 'Dashboard', icon: Gauge, end: true },
-  { to: '/quotes', label: 'Cotizaciones', icon: FileText },
+  { to: '/quotes', label: 'Cotizaciones', icon: FileText, end: true },
+  { to: '/production', label: 'Producción', icon: Factory },
   { to: '/customers', label: 'Clientes', icon: Users },
   { to: '/materials', label: 'Materiales', icon: Package },
   { to: '/printers', label: 'Impresoras', icon: Printer },
 ]
 
+const mobileLinks = links.filter(({ to }) => ['/', '/quotes', '/production', '/customers'].includes(to))
+
 export function AppLayout() {
+  const { user, logout } = useAuth()
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -23,27 +29,28 @@ export function AppLayout() {
               {label}
             </NavLink>
           ))}
-          <NavLink to="/quotes/new" className="nav-link nav-link--create">
+          <NavLink to="/quotes/new" end className={({ isActive }) => `nav-link nav-link--create${isActive ? ' active' : ''}`}>
             <FilePlus2 size={19} />
             Nueva cotización
           </NavLink>
-          <div className="nav-link nav-link--disabled" aria-disabled="true">
-            <Factory size={19} />
-            Producción
-            <small>Próximamente</small>
-          </div>
         </nav>
+        <div className="sidebar-user">
+          <ShieldCheck size={18} />
+          <span><strong>{user?.displayName}</strong><small>{user?.role === 'ADMIN' ? 'Administrador' : 'Operador'}</small></span>
+          <button className="icon-button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={17} /></button>
+        </div>
         <div className="sidebar-footer">
-          <span className="live-dot" /> API configurada
-          <small>Iteración 2</small>
+          PrintVerse <small>Sesión protegida</small>
         </div>
       </aside>
 
       <div className="mobile-topbar">
         <Brand />
-        <NavLink to="/quotes/new" className="button button--accent button--compact">
-          <FilePlus2 size={18} /> Nueva
-        </NavLink>
+        <div className="mobile-topbar-actions">
+          <span className="mobile-user-name">{user?.displayName}</span>
+          <NavLink to="/quotes/new" className="button button--accent button--compact"><FilePlus2 size={18} /> Nueva</NavLink>
+          <button className="icon-button mobile-logout" onClick={logout} aria-label="Cerrar sesión"><LogOut size={18} /></button>
+        </div>
       </div>
 
       <main className="main-content">
@@ -51,16 +58,12 @@ export function AppLayout() {
       </main>
 
       <nav className="mobile-nav" aria-label="Navegación móvil">
-        {links.map(({ to, label, icon: Icon, end }) => (
+        {mobileLinks.map(({ to, label, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? 'active' : '')}>
             <Icon size={20} />
             <span>{label}</span>
           </NavLink>
         ))}
-        <span className="mobile-nav-disabled" aria-disabled="true">
-          <Factory size={20} />
-          <span>Producción</span>
-        </span>
       </nav>
     </div>
   )

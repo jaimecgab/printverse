@@ -1,10 +1,12 @@
 package com.printverse.dto;
 
 import com.printverse.domain.QuoteStatus;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -22,11 +24,13 @@ public final class QuoteDtos {
     }
 
     public record CreateRequest(
-            @NotNull Long customerId,
+            @NotNull @Positive Long customerId,
+            @Size(max = 200) String title,
             @NotNull @FutureOrPresent LocalDate validUntil,
             @FutureOrPresent LocalDate estimatedDeliveryDate,
             @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 4) BigDecimal depositPercentage,
             @Size(max = 3000) String notes,
+            @Size(max = 3000) String internalNotes,
             @NotNull @DecimalMin("0.00") @Digits(integer = 3, fraction = 4) BigDecimal markupPercentage,
             @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 4) BigDecimal discountPercentage,
             @NotNull Boolean taxEnabled,
@@ -34,10 +38,12 @@ public final class QuoteDtos {
     }
 
     public record UpdateRequest(
+            @Size(max = 200) String title,
             @NotNull @FutureOrPresent LocalDate validUntil,
             @FutureOrPresent LocalDate estimatedDeliveryDate,
             @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 4) BigDecimal depositPercentage,
             @Size(max = 3000) String notes,
+            @Size(max = 3000) String internalNotes,
             @NotNull @DecimalMin("0.00") @Digits(integer = 3, fraction = 4) BigDecimal markupPercentage,
             @NotNull @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 4) BigDecimal discountPercentage,
             @NotNull Boolean taxEnabled,
@@ -46,13 +52,14 @@ public final class QuoteDtos {
 
     public record ItemRequest(
             @NotBlank @Size(max = 200) String name,
-            @Positive int quantity,
-            @NotNull Long materialId,
-            @NotNull Long printerId,
+            @Positive @Max(100000) int quantity,
+            @NotNull @Positive Long materialId,
+            @NotNull @Positive Long printerId,
             @NotNull @PositiveOrZero @Digits(integer = 11, fraction = 3) BigDecimal weightGrams,
-            @NotNull @PositiveOrZero Integer printTimeMinutes,
+            @NotNull @PositiveOrZero @Max(525600) Integer printTimeMinutes,
             @NotNull @DecimalMin("0.00") @DecimalMax("100.00") @Digits(integer = 3, fraction = 4) BigDecimal failureRiskPercentage,
-            @DecimalMin("0.00") @Digits(integer = 12, fraction = 2) BigDecimal manualUnitPrice) {
+            @DecimalMin("0.00") @Digits(integer = 12, fraction = 2) BigDecimal manualUnitPrice,
+            @Valid @Size(max = 100) List<@NotNull ChargeRequest> additionalCharges) {
     }
 
     public record ChargeRequest(
@@ -61,6 +68,11 @@ public final class QuoteDtos {
     }
 
     public record StatusRequest(@NotNull QuoteStatus status) {
+    }
+
+    public record DuplicateRequest(
+            @NotNull @FutureOrPresent LocalDate validUntil,
+            @FutureOrPresent LocalDate estimatedDeliveryDate) {
     }
 
     public record CustomerSummary(Long id, String name, String phone, String email) {
@@ -101,10 +113,13 @@ public final class QuoteDtos {
     public record SummaryResponse(
             Long id,
             String quoteNumber,
+            String title,
             CustomerSummary customer,
             QuoteStatus status,
             Instant createdAt,
+            Instant updatedAt,
             LocalDate validUntil,
+            String currencyCode,
             BigDecimal total,
             BigDecimal estimatedProfit,
             BigDecimal realMarginPercentage) {
@@ -113,13 +128,20 @@ public final class QuoteDtos {
     public record Response(
             Long id,
             String quoteNumber,
+            String title,
             CustomerSummary customer,
             QuoteStatus status,
             Instant createdAt,
+            Instant updatedAt,
+            Instant sentAt,
+            Instant acceptedAt,
+            Instant rejectedAt,
             LocalDate validUntil,
             LocalDate estimatedDeliveryDate,
             BigDecimal depositPercentage,
             String notes,
+            String internalNotes,
+            String currencyCode,
             BigDecimal markupPercentage,
             BigDecimal discountPercentage,
             boolean taxEnabled,
@@ -131,6 +153,8 @@ public final class QuoteDtos {
             BigDecimal subtotalAfterDiscount,
             BigDecimal taxAmount,
             BigDecimal total,
+            BigDecimal depositAmount,
+            BigDecimal remainingBalance,
             BigDecimal estimatedProfit,
             BigDecimal realMarginPercentage,
             List<ItemResponse> items) {

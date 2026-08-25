@@ -1,0 +1,15 @@
+node_modules
+dist
+coverage
+.env
+.env.*
+!.env.example
+*.log
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.dump
+*.sql.gz
+backups

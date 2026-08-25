@@ -1,0 +1,5 @@
+# Local-only signing key. Never use this profile or key in a deployed environment.
+app:
+  security:
+    jwt:
+      secret: only-dev-printverse-jwt-signing-key-change-me

@@ -2,6 +2,8 @@ package com.printverse.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -31,6 +33,13 @@ public class Printer {
     @Column(nullable = false)
     private boolean active;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private PrinterOperationalStatus operationalStatus = PrinterOperationalStatus.AVAILABLE;
+
+    @Column(length = 1000)
+    private String notes;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -38,15 +47,25 @@ public class Printer {
     }
 
     public Printer(String name, String model, BigDecimal costPerHour, boolean active) {
+        this(name, model, costPerHour, active, PrinterOperationalStatus.AVAILABLE, null);
+    }
+
+    public Printer(String name, String model, BigDecimal costPerHour, boolean active,
+                   PrinterOperationalStatus operationalStatus, String notes) {
         this.name = name;
         this.model = model;
         this.costPerHour = costPerHour;
         this.active = active;
+        this.operationalStatus = operationalStatus;
+        this.notes = notes;
     }
 
     @PrePersist
     void prePersist() {
         createdAt = Instant.now();
+        if (operationalStatus == null) {
+            operationalStatus = PrinterOperationalStatus.AVAILABLE;
+        }
     }
 
     public Long getId() { return id; }
@@ -58,5 +77,13 @@ public class Printer {
     public void setCostPerHour(BigDecimal costPerHour) { this.costPerHour = costPerHour; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    public PrinterOperationalStatus getOperationalStatus() { return operationalStatus; }
+    public void setOperationalStatus(PrinterOperationalStatus operationalStatus) {
+        this.operationalStatus = operationalStatus;
+    }
+    public void occupy() { operationalStatus = PrinterOperationalStatus.BUSY; }
+    public void release() { operationalStatus = PrinterOperationalStatus.AVAILABLE; }
+    public String getNotes() { return notes; }
+    public void setNotes(String notes) { this.notes = notes; }
     public Instant getCreatedAt() { return createdAt; }
 }
