@@ -46,6 +46,15 @@ public class Quote {
     private Instant createdAt;
 
     @Column(nullable = false)
+    private Instant updatedAt;
+
+    private Instant sentAt;
+
+    private Instant acceptedAt;
+
+    private Instant rejectedAt;
+
+    @Column(nullable = false)
     private LocalDate validUntil;
 
     private LocalDate estimatedDeliveryDate;
@@ -55,6 +64,24 @@ public class Quote {
 
     @Column(length = 3000)
     private String notes;
+
+    @Column(length = 200)
+    private String title;
+
+    @Column(length = 3000)
+    private String internalNotes;
+
+    @Column(nullable = false, length = 3, updatable = false)
+    private String currencyCode = "MXN";
+
+    @Column(length = 150)
+    private String customerNameSnapshot;
+
+    @Column(length = 40)
+    private String customerPhoneSnapshot;
+
+    @Column(length = 254)
+    private String customerEmailSnapshot;
 
     @Column(nullable = false, precision = 7, scale = 4)
     private BigDecimal markupPercentage;
@@ -118,6 +145,7 @@ public class Quote {
     @PrePersist
     void prePersist() {
         createdAt = Instant.now();
+        updatedAt = createdAt;
     }
 
     public void addItem(QuoteItem item) {
@@ -130,12 +158,41 @@ public class Quote {
         item.setQuote(null);
     }
 
+    public void transitionTo(QuoteStatus targetStatus) {
+        Instant now = Instant.now();
+        status = targetStatus;
+        if (targetStatus == QuoteStatus.SENT) {
+            sentAt = now;
+            customerNameSnapshot = customer.getName();
+            customerPhoneSnapshot = customer.getPhone();
+            customerEmailSnapshot = customer.getEmail();
+        } else if (targetStatus == QuoteStatus.ACCEPTED) {
+            acceptedAt = now;
+        } else if (targetStatus == QuoteStatus.REJECTED) {
+            rejectedAt = now;
+        }
+        updatedAt = now;
+    }
+
+    public void copyCustomerSnapshotsFrom(Quote source) {
+        customerNameSnapshot = source.customerNameSnapshot;
+        customerPhoneSnapshot = source.customerPhoneSnapshot;
+        customerEmailSnapshot = source.customerEmailSnapshot;
+    }
+
+    public void touch() {
+        updatedAt = Instant.now();
+    }
+
     public Long getId() { return id; }
     public String getQuoteNumber() { return quoteNumber; }
     public Customer getCustomer() { return customer; }
     public QuoteStatus getStatus() { return status; }
-    public void setStatus(QuoteStatus status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public Instant getSentAt() { return sentAt; }
+    public Instant getAcceptedAt() { return acceptedAt; }
+    public Instant getRejectedAt() { return rejectedAt; }
     public LocalDate getValidUntil() { return validUntil; }
     public void setValidUntil(LocalDate validUntil) { this.validUntil = validUntil; }
     public LocalDate getEstimatedDeliveryDate() { return estimatedDeliveryDate; }
@@ -144,6 +201,14 @@ public class Quote {
     public void setDepositPercentage(BigDecimal value) { this.depositPercentage = value; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getInternalNotes() { return internalNotes; }
+    public void setInternalNotes(String internalNotes) { this.internalNotes = internalNotes; }
+    public String getCurrencyCode() { return currencyCode; }
+    public String getCustomerNameSnapshot() { return customerNameSnapshot; }
+    public String getCustomerPhoneSnapshot() { return customerPhoneSnapshot; }
+    public String getCustomerEmailSnapshot() { return customerEmailSnapshot; }
     public BigDecimal getMarkupPercentage() { return markupPercentage; }
     public void setMarkupPercentage(BigDecimal value) { this.markupPercentage = value; }
     public BigDecimal getDiscountPercentage() { return discountPercentage; }

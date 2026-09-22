@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  flyway:
+    enabled: true
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:false}
+
+management:
+  endpoint:
+    health:
+      show-details: never
+
+app:
+  seed:
+    enabled: false
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+  bootstrap-admin:
+    username: ${APP_ADMIN_USERNAME:admin}
+    display-name: ${APP_ADMIN_DISPLAY_NAME:Administrador}
+    password: ${APP_ADMIN_PASSWORD}
+    required: true

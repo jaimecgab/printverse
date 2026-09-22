@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Verify backend
+        run: mvn --batch-mode verify
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Test
+        run: npm run test
+      - name: Lint
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_DB: printverse_ci
+      POSTGRES_USER: printverse_ci
+      POSTGRES_PASSWORD: ci-database-password
+      JWT_SECRET: ci-only-jwt-signing-key-with-at-least-32-characters
+      APP_ADMIN_USERNAME: admin
+      APP_ADMIN_DISPLAY_NAME: CI Administrator
+      APP_ADMIN_PASSWORD: ci-admin-password
+      FLYWAY_BASELINE_ON_MIGRATE: 'false'
+      FRONTEND_PORT: '8088'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        run: docker compose --env-file .env.example config --quiet
+      - name: Build and smoke test stack
+        run: |
+          set -euo pipefail
+          trap 'docker compose down -v --remove-orphans' EXIT
+          docker compose --env-file .env.example up -d --build --wait
+          curl --fail --silent --show-error http://localhost:8088/healthz
+          curl --fail --silent --show-error http://localhost:8088/actuator/health
+          TOKEN=$(curl --fail --silent --show-error \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"ci-admin-password"}' \
+            http://localhost:8088/api/auth/login \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["accessToken"])')
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $TOKEN" \
+            http://localhost:8088/api/dashboard >/dev/null

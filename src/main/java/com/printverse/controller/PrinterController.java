@@ -3,6 +3,7 @@ package com.printverse.controller;
 import com.printverse.dto.PrinterDtos;
 import com.printverse.service.PrinterService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,17 +40,18 @@ public class PrinterController {
     }
 
     @GetMapping("/{id}")
-    public PrinterDtos.Response get(@PathVariable Long id) {
+    public PrinterDtos.Response get(@PathVariable @Positive Long id) {
         return service.get(id);
     }
 
     @PutMapping("/{id}")
-    public PrinterDtos.Response update(@PathVariable Long id, @Valid @RequestBody PrinterDtos.Request request) {
+    public PrinterDtos.Response update(@PathVariable @Positive Long id,
+                                       @Valid @RequestBody PrinterDtos.Request request) {
         return service.update(id, request);
     }
 
     @PatchMapping("/{id}/active")
-    public PrinterDtos.Response setActive(@PathVariable Long id,
+    public PrinterDtos.Response setActive(@PathVariable @Positive Long id,
                                           @Valid @RequestBody PrinterDtos.ActiveRequest request) {
         return service.setActive(id, request.active());
     }

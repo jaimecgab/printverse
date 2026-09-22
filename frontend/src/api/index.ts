@@ -1,23 +1,38 @@
 import { http } from './http'
 import type {
-  ChargeRequest,
   Customer,
+  CustomerOverview,
   CustomerRequest,
   ItemRequest,
   Material,
   MaterialRequest,
+  Dashboard,
   Printer,
   PrinterRequest,
   Quote,
   QuoteCreateRequest,
+  QuoteDuplicateRequest,
   QuoteStatus,
   QuoteSummary,
   QuoteUpdateRequest,
+  ProductionItemUpdateRequest,
+  ProductionOrder,
+  ProductionOrderCreateRequest,
+  ProductionOrderStatus,
+  AuthSession,
+  AuthUser,
+  LoginRequest,
 } from '../types'
+
+export const authApi = {
+  login: (body: LoginRequest) => http.post<AuthSession>('/api/auth/login', body),
+  me: () => http.get<AuthUser>('/api/auth/me'),
+}
 
 export const customersApi = {
   list: () => http.get<Customer[]>('/api/customers'),
   get: (id: number) => http.get<Customer>(`/api/customers/${id}`),
+  overview: (id: number) => http.get<CustomerOverview>(`/api/customers/${id}/overview`),
   create: (body: CustomerRequest) => http.post<Customer>('/api/customers', body),
   update: (id: number, body: CustomerRequest) => http.put<Customer>(`/api/customers/${id}`, body),
 }
@@ -45,10 +60,20 @@ export const quotesApi = {
   updateItem: (quoteId: number, itemId: number, body: ItemRequest) =>
     http.put<Quote>(`/api/quotes/${quoteId}/items/${itemId}`, body),
   deleteItem: (quoteId: number, itemId: number) => http.delete(`/api/quotes/${quoteId}/items/${itemId}`),
-  addCharge: (quoteId: number, itemId: number, body: ChargeRequest) =>
-    http.post<Quote>(`/api/quotes/${quoteId}/items/${itemId}/charges`, body),
-  deleteCharge: (quoteId: number, itemId: number, chargeId: number) =>
-    http.delete(`/api/quotes/${quoteId}/items/${itemId}/charges/${chargeId}`),
   recalculate: (id: number) => http.post<Quote>(`/api/quotes/${id}/recalculate`),
   setStatus: (id: number, status: QuoteStatus) => http.patch<Quote>(`/api/quotes/${id}/status`, { status }),
+  duplicate: (id: number, body: QuoteDuplicateRequest) => http.post<Quote>(`/api/quotes/${id}/duplicate`, body),
+  pdf: (id: number, signal?: AbortSignal) => http.download(`/api/quotes/${id}/pdf`, `cotizacion-${id}.pdf`, signal),
 }
+
+export const productionApi = {
+  list: () => http.get<ProductionOrder[]>('/api/production-orders'),
+  get: (id: number) => http.get<ProductionOrder>(`/api/production-orders/${id}`),
+  getByQuote: (quoteId: number) => http.get<ProductionOrder>(`/api/production-orders/by-quote/${quoteId}`),
+  convert: (quoteId: number, body?: ProductionOrderCreateRequest) => http.post<ProductionOrder>(`/api/quotes/${quoteId}/production-order`, body),
+  setStatus: (id: number, status: ProductionOrderStatus) => http.patch<ProductionOrder>(`/api/production-orders/${id}/status`, { status }),
+  updateItem: (orderId: number, itemId: number, body: ProductionItemUpdateRequest) =>
+    http.patch<ProductionOrder>(`/api/production-orders/${orderId}/items/${itemId}`, body),
+}
+
+export const dashboardApi = { get: () => http.get<Dashboard>('/api/dashboard') }

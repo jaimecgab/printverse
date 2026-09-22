@@ -6,12 +6,14 @@ import com.printverse.domain.Material;
 import com.printverse.domain.Printer;
 import com.printverse.domain.Quote;
 import com.printverse.domain.QuoteItem;
+import com.printverse.exception.BusinessRuleException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class QuoteCalculationServiceTest {
 
@@ -102,6 +104,41 @@ class QuoteCalculationServiceTest {
 
         assertMoney(quote.getTotal(), "0.00");
         assertThat(quote.getRealMarginPercentage()).isEqualByComparingTo("0.0000");
+    }
+
+    @Test
+    void acceptsTheLargestPersistableItemAmountAtTheBoundary() {
+        Quote quote = quote("0", "0", false, "0");
+        quote.addItem(item("0", 0, "0", 1, "999999999999.99"));
+
+        service.recalculate(quote);
+
+        assertMoney(quote.getFinalSubtotal(), "999999999999.99");
+    }
+
+    @Test
+    void rejectsAValidDtoCombinationThatWouldOverflowQuoteTotals() {
+        Quote quote = quote("0", "0", false, "0");
+        quote.addItem(item("0", 0, "0", 100000, "999999999999.99"));
+
+        assertThatThrownBy(() -> service.recalculate(quote))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Final subtotal")
+                .hasMessageContaining("99999999999999.99");
+    }
+
+    @Test
+    void rejectsAdditionalChargeSumsThatWouldOverflowAnItemColumn() {
+        Quote quote = quote("0", "0", false, "0");
+        QuoteItem item = item("0", 0, "0", 1, null);
+        item.addAdditionalCharge(new AdditionalCharge("One", new BigDecimal("999999999999.99")));
+        item.addAdditionalCharge(new AdditionalCharge("Two", new BigDecimal("999999999999.99")));
+        quote.addItem(item);
+
+        assertThatThrownBy(() -> service.recalculate(quote))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Additional charges per unit")
+                .hasMessageContaining("999999999999.99");
     }
 
     private static Quote quote(String markup, String discount, boolean taxEnabled, String tax) {

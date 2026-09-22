@@ -32,6 +32,9 @@ export function Modal({ title, description, onClose, children, wide = false }: {
     }
     document.addEventListener('keydown', handleKeyDown)
     document.body.classList.add('modal-open')
+    const firstFocusable = modal?.querySelector<HTMLElement>('.modal-body button:not([disabled]), .modal-body input:not([disabled]), .modal-body select:not([disabled]), .modal-body textarea:not([disabled]), .modal-body a[href]')
+      || modal?.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href]')
+    if (modal && !modal.contains(document.activeElement)) firstFocusable?.focus()
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
       document.body.classList.remove('modal-open')

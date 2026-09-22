@@ -25,7 +25,10 @@ public class MaterialService {
         if (repository.existsByNameIgnoreCase(name)) {
             throw new ConflictException("A material named '" + name + "' already exists");
         }
-        Material material = new Material(name, MoneyUtils.money(request.pricePerKg()), request.active());
+        Material material = new Material(name, MoneyUtils.money(request.pricePerKg()), request.active(),
+                CustomerService.nullable(request.materialType()), CustomerService.nullable(request.brand()),
+                CustomerService.nullable(request.color()), request.stockGrams(), request.lowStockThresholdGrams(),
+                CustomerService.nullable(request.notes()));
         return toResponse(repository.save(material));
     }
 
@@ -48,6 +51,12 @@ public class MaterialService {
         }
         material.setName(name);
         material.setPricePerKg(MoneyUtils.money(request.pricePerKg()));
+        material.setMaterialType(CustomerService.nullable(request.materialType()));
+        material.setBrand(CustomerService.nullable(request.brand()));
+        material.setColor(CustomerService.nullable(request.color()));
+        material.setStockGrams(request.stockGrams());
+        material.setLowStockThresholdGrams(request.lowStockThresholdGrams());
+        material.setNotes(CustomerService.nullable(request.notes()));
         material.setActive(request.active());
         return toResponse(material);
     }
@@ -66,6 +75,7 @@ public class MaterialService {
 
     private static MaterialDtos.Response toResponse(Material value) {
         return new MaterialDtos.Response(value.getId(), value.getName(), value.getPricePerKg(),
-                value.isActive(), value.getCreatedAt());
+                value.getMaterialType(), value.getBrand(), value.getColor(), value.getStockGrams(),
+                value.getLowStockThresholdGrams(), value.getNotes(), value.isActive(), value.getCreatedAt());
     }
 }

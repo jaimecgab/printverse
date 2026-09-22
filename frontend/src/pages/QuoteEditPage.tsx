@@ -9,8 +9,9 @@ import { PieceEditor } from '../components/PieceEditor'
 import { QuoteFinancials } from '../components/QuoteFinancials'
 import { StatusBadge } from '../components/StatusBadge'
 import { useToast } from '../context/ToastContext'
-import type { ChargeRequest, ItemRequest, Material, Printer, Quote, QuoteItem, QuoteUpdateRequest } from '../types'
+import type { ItemRequest, Material, Printer, Quote, QuoteItem, QuoteUpdateRequest } from '../types'
 import { currency, formatDate, number, toDateInput } from '../utils/format'
+import { useUnsavedChangesWarning } from '../utils/useUnsavedChangesWarning'
 
 interface EditorData { quote: Quote; materials: Material[]; printers: Printer[] }
 
@@ -18,6 +19,7 @@ export function QuoteEditPage() {
   const id = Number(useParams().id)
   const [data, setData] = useState<EditorData | null>(null)
   const [form, setForm] = useState<QuoteUpdateRequest | null>(null)
+  const [savedForm, setSavedForm] = useState<QuoteUpdateRequest | null>(null)
   const [piece, setPiece] = useState<QuoteItem | 'new' | null>(null)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
@@ -27,17 +29,24 @@ export function QuoteEditPage() {
   const toast = useToast()
 
   useEffect(() => {
+    if (!Number.isInteger(id) || id <= 0) { setError('El identificador de la cotización no es válido.'); return }
     let active = true
     async function load() {
       try {
+        setError('')
         const [quote, materials, printers] = await Promise.all([quotesApi.get(id), materialsApi.list(), printersApi.list()])
         if (!active) return
         setData({ quote, materials, printers })
-        setForm({ validUntil: quote.validUntil, estimatedDeliveryDate: quote.estimatedDeliveryDate ?? null, depositPercentage: quote.depositPercentage ?? null, notes: quote.notes ?? null, markupPercentage: quote.markupPercentage, discountPercentage: quote.discountPercentage, taxEnabled: quote.taxEnabled, taxPercentage: quote.taxPercentage })
+        const terms = { title: quote.title ?? null, validUntil: quote.validUntil, estimatedDeliveryDate: quote.estimatedDeliveryDate ?? null, depositPercentage: quote.depositPercentage ?? null, notes: quote.notes ?? null, internalNotes: quote.internalNotes ?? null, markupPercentage: quote.markupPercentage, discountPercentage: quote.discountPercentage, taxEnabled: quote.taxEnabled, taxPercentage: quote.taxPercentage }
+        setForm(terms); setSavedForm(terms); setError('')
       } catch (caught) { if (active) setError(caught instanceof ApiError ? caught.message : 'No fue posible abrir el editor.') }
     }
     void load(); return () => { active = false }
   }, [id, reload])
+
+  const termsDirty = Boolean(form && savedForm && JSON.stringify(form) !== JSON.stringify(savedForm))
+
+  useUnsavedChangesWarning(termsDirty, 'Hay cambios de las condiciones sin guardar. ¿Salir de todos modos?')
 
   async function refreshQuote() {
     const quote = await quotesApi.get(id)
@@ -47,38 +56,20 @@ export function QuoteEditPage() {
 
   async function saveTerms(event: FormEvent) {
     event.preventDefault(); if (!form || saving) return; setSaving(true); setFieldErrors({})
-    try { const quote = await quotesApi.update(id, { ...form, notes: form.notes?.trim() || null }); setData((current) => current ? { ...current, quote } : current); toast.success('Condiciones actualizadas con el cálculo del servidor.') } catch (caught) { if (caught instanceof ApiError) { setFieldErrors(caught.errors); toast.error(caught.message) } else toast.error('No fue posible guardar las condiciones.') } finally { setSaving(false) }
+    try { const payload = { ...form, title: form.title?.trim() || null, notes: form.notes?.trim() || null, internalNotes: form.internalNotes?.trim() || null }; const quote = await quotesApi.update(id, payload); setData((current) => current ? { ...current, quote } : current); setForm(payload); setSavedForm(payload); toast.success('Condiciones actualizadas con el cálculo del servidor.') } catch (caught) { if (caught instanceof ApiError) { setFieldErrors(caught.errors); toast.error(caught.message) } else toast.error('No fue posible guardar las condiciones.') } finally { setSaving(false) }
   }
 
-  async function savePiece(payload: ItemRequest, charges: ChargeRequest[]): Promise<ChargeRequest[]> {
-    if (!data) return charges
-    const previousIds = new Set(data.quote.items.map((item) => item.id))
-    let response = piece === 'new' ? await quotesApi.addItem(id, payload) : await quotesApi.updateItem(id, piece!.id, payload)
+  async function savePiece(payload: ItemRequest): Promise<void> {
+    if (!data) return
+    const response = piece === 'new' ? await quotesApi.addItem(id, payload) : await quotesApi.updateItem(id, piece!.id, payload)
     setData({ ...data, quote: response })
-    const itemId = piece === 'new' ? response.items.find((item) => !previousIds.has(item.id))?.id : piece!.id
-    if (!itemId) throw new Error('La pieza se guardó, pero no fue posible identificarla para agregar cargos.')
-    const failedCharges: ChargeRequest[] = []
-    for (const charge of charges) {
-      try { response = await quotesApi.addCharge(id, itemId, charge); setData((current) => current ? { ...current, quote: response } : current) } catch { failedCharges.push(charge) }
-    }
-    if (failedCharges.length) toast.error(`La pieza se guardó, pero faltó agregar: ${failedCharges.map((charge) => charge.description).join(', ')}.`)
-    else toast.success(piece === 'new' ? 'Pieza agregada y cotización recalculada.' : 'Pieza actualizada y cotización recalculada.')
-    return failedCharges
+    toast.success(piece === 'new' ? 'Pieza y cargos agregados; cotización recalculada.' : 'Pieza y cargos actualizados; cotización recalculada.')
   }
 
   async function deleteItem(item: QuoteItem) {
     if (busy || !window.confirm(`¿Eliminar la pieza “${item.name}”?`)) return
     setBusy(true)
     try { await quotesApi.deleteItem(id, item.id); await refreshQuote(); toast.success('Pieza eliminada; cálculo actualizado.') } catch (caught) { toast.error(caught instanceof ApiError ? caught.message : 'No fue posible eliminar la pieza.') } finally { setBusy(false) }
-  }
-
-  async function deleteCharge(chargeId: number) {
-    if (!piece || piece === 'new') return
-    await quotesApi.deleteCharge(id, piece.id, chargeId)
-    const quote = await refreshQuote()
-    const refreshedPiece = quote.items.find((item) => item.id === piece.id)
-    if (refreshedPiece) setPiece(refreshedPiece)
-    toast.success('Cargo eliminado; cálculo actualizado.')
   }
 
   async function recalculate() {
@@ -103,10 +94,11 @@ export function QuoteEditPage() {
       <div className="editor-layout">
         <div className="editor-main">
           <form className="panel quote-terms-form" onSubmit={saveTerms}>
-            <div className="section-heading"><div><p className="eyebrow">Condiciones</p><h2>Datos generales</h2></div><button className="button button--secondary button--compact" disabled={saving}><Save size={16} /> {saving ? 'Guardando…' : 'Guardar condiciones'}</button></div>
+            <div className="section-heading"><div><p className="eyebrow">Condiciones</p><h2>Datos generales</h2>{termsDirty && <span className="unsaved-indicator" role="status">Cambios sin guardar</span>}</div><button className="button button--secondary button--compact" disabled={saving || !termsDirty}><Save size={16} /> {saving ? 'Guardando…' : 'Guardar condiciones'}</button></div>
+            <FormField label="Título del proyecto" htmlFor="edit-title" error={fieldErrors.title}><input id="edit-title" maxLength={200} value={form.title || ''} onChange={(event) => setForm({ ...form, title: event.target.value || null })} placeholder="Ej. Trofeos para torneo de verano" /></FormField>
             <div className="form-grid form-grid--2"><FormField label="Válida hasta *" htmlFor="edit-valid" error={fieldErrors.validUntil}><input id="edit-valid" type="date" min={toDateInput(new Date())} required value={form.validUntil} onChange={(event) => setForm({ ...form, validUntil: event.target.value })} /></FormField><FormField label="Entrega estimada" htmlFor="edit-delivery" error={fieldErrors.estimatedDeliveryDate}><input id="edit-delivery" type="date" min={toDateInput(new Date())} value={form.estimatedDeliveryDate || ''} onChange={(event) => setForm({ ...form, estimatedDeliveryDate: event.target.value || null })} /></FormField><FormField label="Anticipo (%)" htmlFor="edit-deposit" error={fieldErrors.depositPercentage}><input id="edit-deposit" type="number" min="0" max="100" step="0.0001" value={form.depositPercentage ?? ''} onChange={(event) => setForm({ ...form, depositPercentage: event.target.value === '' ? null : Number(event.target.value) })} /></FormField><FormField label="Markup sobre costo (%) *" htmlFor="edit-markup" error={fieldErrors.markupPercentage}><input id="edit-markup" type="number" min="0" step="0.0001" required value={form.markupPercentage} onChange={(event) => setForm({ ...form, markupPercentage: Number(event.target.value) })} /></FormField><FormField label="Descuento (%) *" htmlFor="edit-discount" error={fieldErrors.discountPercentage}><input id="edit-discount" type="number" min="0" max="100" step="0.0001" required value={form.discountPercentage} onChange={(event) => setForm({ ...form, discountPercentage: Number(event.target.value) })} /></FormField><FormField label="IVA (%) *" htmlFor="edit-tax" error={fieldErrors.taxPercentage}><input id="edit-tax" type="number" min="0" max="100" step="0.0001" required disabled={!form.taxEnabled} value={form.taxPercentage} onChange={(event) => setForm({ ...form, taxPercentage: Number(event.target.value) })} /></FormField></div>
             <label className="check-row"><input type="checkbox" checked={form.taxEnabled} onChange={(event) => setForm({ ...form, taxEnabled: event.target.checked })} /><span><strong>Aplicar IVA</strong><small>Calculado después del descuento.</small></span></label>
-            <FormField label="Notas" htmlFor="edit-notes" error={fieldErrors.notes}><textarea id="edit-notes" rows={4} maxLength={3000} value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value || null })} /></FormField>
+            <div className="form-grid form-grid--2"><FormField label="Notas para el cliente" htmlFor="edit-notes" error={fieldErrors.notes} hint="Se incluyen en el documento comercial."><textarea id="edit-notes" rows={5} maxLength={3000} value={form.notes || ''} onChange={(event) => setForm({ ...form, notes: event.target.value || null })} /></FormField><FormField label="Notas internas" htmlFor="edit-internal-notes" error={fieldErrors.internalNotes} hint="Sólo visibles para el equipo."><textarea id="edit-internal-notes" rows={5} maxLength={3000} value={form.internalNotes || ''} onChange={(event) => setForm({ ...form, internalNotes: event.target.value || null })} /></FormField></div>
           </form>
 
           <section className="panel pieces-panel">
@@ -119,7 +111,7 @@ export function QuoteEditPage() {
         <aside className="editor-summary"><p className="eyebrow">Cálculo vigente</p><h2>Resumen autoritativo</h2><p>Última respuesta recibida del backend.</p><dl><div><dt>Costo interno</dt><dd>{currency.format(quote.internalCost)}</dd></div><div><dt>Subtotal sugerido</dt><dd>{currency.format(quote.suggestedSubtotal)}</dd></div><div><dt>Subtotal final</dt><dd>{currency.format(quote.finalSubtotal)}</dd></div><div><dt>Descuento</dt><dd>− {currency.format(quote.discountAmount)}</dd></div><div><dt>IVA</dt><dd>{currency.format(quote.taxAmount)}</dd></div><div className="summary-total"><dt>Total</dt><dd>{currency.format(quote.total)}</dd></div></dl><div className="profit-box"><span>Ganancia estimada</span><strong>{currency.format(quote.estimatedProfit)}</strong><small>Margen real {number.format(quote.realMarginPercentage)}%</small></div><small className="snapshot-note">Recalcular conserva las instantáneas de material y máquina de cada pieza.</small></aside>
       </div>
       <div className="mobile-financials"><QuoteFinancials quote={quote} /></div>
-      {piece && <PieceEditor key={piece === 'new' ? 'new' : piece.id} item={piece === 'new' ? undefined : piece} materials={materials} printers={printers} onClose={() => setPiece(null)} onSave={savePiece} onDeleteCharge={deleteCharge} />}
+      {piece && <PieceEditor key={piece === 'new' ? 'new' : piece.id} item={piece === 'new' ? undefined : piece} materials={materials} printers={printers} onClose={() => setPiece(null)} onSave={savePiece} />}
     </div>
   )
 }

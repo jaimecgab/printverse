@@ -1,5 +1,6 @@
 import { Mail, Pencil, Phone, Plus, Search, UserRound, Users } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { customersApi } from '../api'
 import { ApiError } from '../api/http'
 import { EmptyState, ErrorState, LoadingState } from '../components/Feedback'
@@ -38,7 +39,7 @@ export function CustomersPage() {
   }
 
   function update(field: keyof CustomerRequest, value: string) {
-    setForm((current) => ({ ...current, [field]: value || null }))
+    setForm((current) => ({ ...current, [field]: field === 'name' || field === 'phone' ? value : value || null }))
     setFieldErrors((current) => ({ ...current, [field]: '' }))
   }
 
@@ -47,6 +48,11 @@ export function CustomersPage() {
     if (saving) return
     setSaving(true)
     setFieldErrors({})
+    const localErrors: Record<string, string> = {}
+    if (!form.name.trim()) localErrors.name = 'Escribe el nombre del cliente.'
+    if (!form.phone.trim()) localErrors.phone = 'Escribe un teléfono de contacto.'
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) localErrors.email = 'Escribe un correo electrónico válido.'
+    if (Object.keys(localErrors).length) { setFieldErrors(localErrors); setSaving(false); return }
     try {
       const payload = { ...form, name: form.name.trim(), phone: form.phone.trim(), email: form.email?.trim() || null, notes: form.notes?.trim() || null }
       const response = editing === 'new' ? await customersApi.create(payload) : await customersApi.update(editing!.id, payload)
@@ -84,11 +90,11 @@ export function CustomersPage() {
           {filtered.map((customer) => (
             <article className="customer-card" key={customer.id}>
               <div className="customer-card-top"><span className="avatar"><UserRound /></span><button className="icon-button" onClick={() => open(customer)} aria-label={`Editar a ${customer.name}`}><Pencil size={17} /></button></div>
-              <h2>{customer.name}</h2>
+              <h2><Link to={`/customers/${customer.id}`}>{customer.name}</Link></h2>
               <a href={`tel:${customer.phone}`}><Phone size={16} /> {customer.phone}</a>
               {customer.email ? <a href={`mailto:${customer.email}`}><Mail size={16} /> {customer.email}</a> : <span className="muted-line"><Mail size={16} /> Sin correo</span>}
               {customer.notes && <p className="customer-notes">{customer.notes}</p>}
-              <footer>Cliente desde {formatDate(customer.createdAt)}</footer>
+              <footer><span>Cliente desde {formatDate(customer.createdAt)}</span><Link to={`/customers/${customer.id}`} className="text-link">Ver actividad</Link></footer>
             </article>
           ))}
         </section>

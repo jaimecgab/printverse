@@ -3,6 +3,7 @@ package com.printverse.controller;
 import com.printverse.dto.CustomerDtos;
 import com.printverse.service.CustomerService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,12 +39,18 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
-    public CustomerDtos.Response get(@PathVariable Long id) {
+    public CustomerDtos.Response get(@PathVariable @Positive Long id) {
         return service.get(id);
     }
 
+    @GetMapping("/{id}/overview")
+    public CustomerDtos.Overview overview(@PathVariable @Positive Long id) {
+        return service.overview(id);
+    }
+
     @PutMapping("/{id}")
-    public CustomerDtos.Response update(@PathVariable Long id, @Valid @RequestBody CustomerDtos.Request request) {
+    public CustomerDtos.Response update(@PathVariable @Positive Long id,
+                                        @Valid @RequestBody CustomerDtos.Request request) {
         return service.update(id, request);
     }
 

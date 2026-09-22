@@ -24,4 +24,7 @@ public interface QuoteRepository extends JpaRepository<Quote, Long> {
 
     @EntityGraph(attributePaths = "customer")
     List<Quote> findAllByOrderByCreatedAtDesc();
+
+    @EntityGraph(attributePaths = "customer")
+    List<Quote> findByCustomerIdOrderByCreatedAtDesc(Long customerId);
 }

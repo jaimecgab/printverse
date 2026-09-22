@@ -3,6 +3,7 @@ package com.printverse.controller;
 import com.printverse.dto.MaterialDtos;
 import com.printverse.service.MaterialService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,17 +40,18 @@ public class MaterialController {
     }
 
     @GetMapping("/{id}")
-    public MaterialDtos.Response get(@PathVariable Long id) {
+    public MaterialDtos.Response get(@PathVariable @Positive Long id) {
         return service.get(id);
     }
 
     @PutMapping("/{id}")
-    public MaterialDtos.Response update(@PathVariable Long id, @Valid @RequestBody MaterialDtos.Request request) {
+    public MaterialDtos.Response update(@PathVariable @Positive Long id,
+                                        @Valid @RequestBody MaterialDtos.Request request) {
         return service.update(id, request);
     }
 
     @PatchMapping("/{id}/active")
-    public MaterialDtos.Response setActive(@PathVariable Long id,
+    public MaterialDtos.Response setActive(@PathVariable @Positive Long id,
                                            @Valid @RequestBody MaterialDtos.ActiveRequest request) {
         return service.setActive(id, request.active());
     }

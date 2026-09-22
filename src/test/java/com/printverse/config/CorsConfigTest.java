@@ -3,6 +3,7 @@ package com.printverse.config;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = CorsConfigTest.TestController.class,
         properties = "app.cors.allowed-origins=https://frontend.example")
+@AutoConfigureMockMvc(addFilters = false)
 @Import(CorsConfig.class)
 class CorsConfigTest {
 
@@ -27,12 +29,13 @@ class CorsConfigTest {
         mockMvc.perform(options("/api/test")
                         .header("Origin", "https://frontend.example")
                         .header("Access-Control-Request-Method", "POST")
-                        .header("Access-Control-Request-Headers", "Content-Type, Accept"))
+                        .header("Access-Control-Request-Headers", "Content-Type, Accept, Authorization"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://frontend.example"))
                 .andExpect(header().string("Access-Control-Allow-Methods", containsString("POST")))
                 .andExpect(header().string("Access-Control-Allow-Headers", containsString("Content-Type")))
-                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Accept")));
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Accept")))
+                .andExpect(header().string("Access-Control-Allow-Headers", containsString("Authorization")));
     }
 
     @Test

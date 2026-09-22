@@ -6,6 +6,7 @@ import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -38,7 +39,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PessimisticLockingFailureException.class)
     ProblemDetail handleConcurrentUpdate(PessimisticLockingFailureException exception) {
         return problem(HttpStatus.CONFLICT, "Concurrent update conflict",
-                "The quote is being modified by another request; retry the operation");
+                "The resource is being modified by another request; retry the operation");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -59,6 +60,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ProblemDetail handleUnreadableMessage(HttpMessageNotReadableException exception) {
         return problem(HttpStatus.BAD_REQUEST, "Malformed request", "The request body is missing or contains invalid values");
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    ProblemDetail handleBadCredentials(BadCredentialsException exception) {
+        return problem(HttpStatus.UNAUTHORIZED, "Authentication failed", "Invalid username or password");
     }
 
     private static ProblemDetail problem(HttpStatus status, String title, String detail) {
