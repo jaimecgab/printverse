@@ -10,7 +10,7 @@ export function Brand({ compact = false }: { compact?: boolean }) {
       {!compact && (
         <span className="brand-type">
           PRINT<span>VERSE</span>
-          <small>ESTUDIO DE FABRICACIÓN</small>
+          <small>GESTIÓN DE IMPRESIÓN 3D</small>
         </span>
       )}
     </div>

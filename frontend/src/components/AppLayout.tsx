@@ -22,7 +22,7 @@ export function AppLayout() {
       <aside className="sidebar">
         <Brand />
         <nav className="sidebar-nav" aria-label="Navegación principal">
-          <p className="nav-caption">Taller</p>
+          <p className="nav-caption">Navegación</p>
           {links.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}>
               <Icon size={19} />
@@ -38,9 +38,6 @@ export function AppLayout() {
           <ShieldCheck size={18} />
           <span><strong>{user?.displayName}</strong><small>{user?.role === 'ADMIN' ? 'Administrador' : 'Operador'}</small></span>
           <button className="icon-button" onClick={logout} aria-label="Cerrar sesión" title="Cerrar sesión"><LogOut size={17} /></button>
-        </div>
-        <div className="sidebar-footer">
-          PrintVerse <small>Sesión protegida</small>
         </div>
       </aside>
 
