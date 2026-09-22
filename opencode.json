@@ -23,6 +23,8 @@
     { "action": "subagent", "resource": "*", "effect": "ask" },
     { "action": "subagent", "resource": "planner", "effect": "allow" },
     { "action": "subagent", "resource": "reviewer", "effect": "allow" },
+    { "action": "subagent", "resource": "builder", "effect": "allow" },
+    { "action": "subagent", "resource": "debugger", "effect": "allow" },
     { "action": "webfetch", "resource": "*", "effect": "ask" },
     { "action": "websearch", "resource": "*", "effect": "ask" },
     { "action": "external_directory", "resource": "*", "effect": "deny" },
